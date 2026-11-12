@@ -3,7 +3,7 @@
 try { importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js'); } catch (e) {}
 
 // Bump this when you change any file, so phones pick up the new version.
-const VERSION = 'keepy-uppy-v9';
+const VERSION = 'keepy-uppy-v10';
 const SHELL = [
   './',
   './index.html',
@@ -12,7 +12,8 @@ const SHELL = [
   './icons/icon-512.png',
   './icons/icon-maskable-512.png',
   './icons/apple-touch-icon.png',
-  './icons/favicon-32.png'
+  './icons/favicon-32.png',
+  './share.js'
 ];
 
 self.addEventListener('install', (event) => {
