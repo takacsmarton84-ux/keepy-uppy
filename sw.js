@@ -3,7 +3,7 @@
 try { importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js'); } catch (e) {}
 
 // Bump this when you change any file, so phones pick up the new version.
-const VERSION = 'keepy-uppy-v10';
+const VERSION = 'keepy-uppy-v11';
 const SHELL = [
   './',
   './index.html',

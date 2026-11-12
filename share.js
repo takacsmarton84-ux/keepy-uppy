@@ -27,7 +27,7 @@
       user-select: text;
     }
     .share-row input:focus { border-color: var(--accent); }
-    .share-row input.shake { animation: shake 0.35s; border-color: #e5484d; }
+    .share-row input.shake, .nick input.shake { animation: shake 0.35s; border-color: #e5484d; }
     @keyframes shake { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
     .card button.share-btn {
       background: transparent;
@@ -49,6 +49,25 @@
   const nameInput = document.getElementById('playerName');
   const shareBtn = document.getElementById('shareBtn');
   try { nameInput.value = localStorage.getItem(NAME_KEY) || ''; } catch (e) {}
+
+  /* ---------- shared nickname with the leaderboard ---------- */
+  // When the leaderboard is on, the card uses its nickname and this file's
+  // own name field stays hidden, so players only type their name once.
+  const NICK_KEY = 'keepy-nick';
+  const nickBox = document.getElementById('nickBox');
+  const nickInput = document.getElementById('nickInput');
+  const useLeaderboardName = !!(nickBox && nickInput && typeof LEADERBOARD !== 'undefined' &&
+    LEADERBOARD.supabaseUrl && LEADERBOARD.supabaseKey);
+  function leaderboardName() { try { return (localStorage.getItem(NICK_KEY) || '').trim(); } catch (e) { return ''; } }
+  if (useLeaderboardName) {
+    nameInput.hidden = true;
+    nameInput.style.display = 'none';
+    // a name typed here earlier is offered as the leaderboard nickname
+    if (!leaderboardName() && nameInput.value && !nickInput.value) nickInput.value = nameInput.value.slice(0, 20);
+    // the leaderboard handler saves the nickname first, then the card is rebuilt with it
+    nickBox.addEventListener('submit', () => setTimeout(() => { cached = null; prepare(); }, 0));
+    nickInput.addEventListener('input', () => nickInput.classList.remove('shake'));
+  }
 
   /* ---------- images used on the card ---------- */
   function loadImage(src) {
@@ -219,7 +238,7 @@
   let cached = null; // { key, file }
   let building = null;
   function currentScore() { return parseInt(document.getElementById('finalScore').textContent, 10) || 0; }
-  function currentName() { return nameInput.value.trim(); }
+  function currentName() { return useLeaderboardName ? leaderboardName() : nameInput.value.trim(); }
 
   function prepare() {
     const name = currentName();
@@ -247,10 +266,13 @@
   shareBtn.addEventListener('click', async () => {
     const name = currentName();
     if (!name) {
-      nameInput.classList.remove('shake');
-      void nameInput.offsetWidth;
-      nameInput.classList.add('shake');
-      nameInput.focus();
+      // no name yet: point at the field the player has to fill in
+      const field = useLeaderboardName ? nickInput : nameInput;
+      if (useLeaderboardName) nickBox.hidden = false;
+      field.classList.remove('shake');
+      void field.offsetWidth;
+      field.classList.add('shake');
+      field.focus();
       return;
     }
     const score = currentScore();
