@@ -381,8 +381,8 @@ const BRAND = {
    Ha üres, a ranglista gombok nem jelennek meg.
    --------------------------------------------------------------- */
 const LEADERBOARD = {
-  supabaseUrl: '',
-  supabaseKey: ''
+  supabaseUrl: 'https://pjkkdtacxwhgwkngolll.supabase.co',
+  supabaseKey: 'sb_publishable_KkqSqcd0JwuT_zl1--zEFw_QkqI3a6n'
 };
 
 (function () {
@@ -566,7 +566,7 @@ const LEADERBOARD = {
     const key = LEADERBOARD.supabaseKey;
     const headers = Object.assign({ apikey: key, 'Content-Type': 'application/json' }, opts.headers || {});
     if (key.indexOf('sb_') !== 0) headers.Authorization = 'Bearer ' + key; // régi (JWT) anon key
-    return fetch(LEADERBOARD.supabaseUrl.replace(/\/+$/, '') + '/rest/v1/' + path, Object.assign({}, opts, { headers }))
+    return fetch(LEADERBOARD.supabaseUrl.replace(/\/+$/, '').replace(/\/rest\/v1$/, '') + '/rest/v1/' + path, Object.assign({}, opts, { headers }))
       .then((r) => { if (!r.ok) { const err = new Error('HTTP ' + r.status); err.status = r.status; throw err; } return r; });
   }
 
