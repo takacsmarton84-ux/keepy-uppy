@@ -742,7 +742,9 @@ const LEADERBOARD = {
     tabStreak.setAttribute('aria-selected', String(lbTab === 'streak'));
     lbStatus(T.loading);
     flush()
-      .then(() => api('leaderboard_' + col + '?select=nickname,' + col + '&order=' + col + '.desc,created_at.asc&limit=100'))
+      // a 10 legjobb játék – ugyanaz a játékos többször is szerepelhet
+      .then(() => api('scores?select=nickname,' + col + (col === 'streak' ? '&streak=gt.0' : '') +
+        '&order=' + col + '.desc,created_at.asc&limit=10'))
       .then((r) => r.json())
       .then((rows) => {
         if (req !== lbReq) return;
