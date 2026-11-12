@@ -74,7 +74,7 @@ body { font-family: var(--font); color: var(--ink); }
   align-items: center;
   pointer-events: none;
 }
-.crest { width: 36px; height: 40px; display: block; }
+.crest { width: 36px; height: 40px; display: block; pointer-events: auto; -webkit-touch-callout: none; }
 .crest img { width: 100%; height: 100%; object-fit: contain; }
 .club { text-align: center; font-weight: 600; font-size: 17px; letter-spacing: 0.01em; }
 .hud {
@@ -289,6 +289,19 @@ body { font-family: var(--font); color: var(--ink); }
 #instInstallBtn { margin-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; }
 #instInstallBtn[hidden] { display: none; }
 #instInstallBtn svg { width: 20px; height: 20px; flex: none; }
+#admin { background: rgba(12, 30, 44, 0.7); align-items: center; }
+#admin .card { max-height: calc(100vh - 48px); display: flex; flex-direction: column; }
+#admin .lb-list { max-height: none; flex: 1; min-height: 120px; }
+#admin .lb-list li { grid-template-columns: 34px 1fr auto; }
+#admin .lb-list .when { display: block; font-size: 12px; font-weight: 500; color: var(--card-muted); overflow: hidden; text-overflow: ellipsis; }
+#admin .lb-list .val { text-align: right; line-height: 1.1; }
+#admin .lb-list .val small { display: block; font-size: 11px; font-weight: 600; color: var(--card-muted); }
+#admin .pill { align-self: flex-start; }
+.admin-sum { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.admin-sum div { background: rgba(127, 140, 150, 0.14); border-radius: 12px; padding: 10px 12px; }
+.admin-sum b { display: block; font-size: 24px; font-weight: 800; line-height: 1.1; }
+.admin-sum span { font-size: 12px; font-weight: 600; color: var(--card-muted); }
+.admin-err { color: #d64545; font-size: 14px; font-weight: 600; margin: -6px 0 10px; }
 .card button.ghost { background: none; color: var(--card-muted); font: 600 14px var(--font); padding: 10px; margin-top: 4px; }
 @media (prefers-reduced-motion: reduce) {
   .score { transition: none; }
@@ -365,6 +378,32 @@ body { font-family: var(--font); color: var(--ink); }
     </div>
     <ol class="lb-list" id="lbList"></ol>
     <button id="lbClose"></button>
+  </div>
+</div>
+
+<div class="overlay" id="admin" hidden>
+  <div class="card" role="dialog" aria-modal="true" aria-labelledby="adminTitle">
+    <div class="pill" id="adminTitle">Admin</div>
+    <form class="nick" id="adminLogin">
+      <label for="adminPass">Password</label>
+      <div class="row">
+        <input id="adminPass" type="password" autocomplete="off" enterkeyhint="go">
+        <button type="submit">Open</button>
+      </div>
+    </form>
+    <p class="admin-err" id="adminErr" hidden></p>
+    <div id="adminBody" hidden>
+      <div class="admin-sum">
+        <div><b id="adminGames">–</b><span>Games played</span></div>
+        <div><b id="adminPlayers">–</b><span>Players</span></div>
+      </div>
+      <div class="tabs" role="tablist">
+        <button role="tab" id="adminTabAll" aria-selected="true">All scores</button>
+        <button role="tab" id="adminTabPlayers" aria-selected="false">Players</button>
+      </div>
+    </div>
+    <ol class="lb-list" id="adminList" hidden></ol>
+    <button id="adminClose">Close</button>
   </div>
 </div>
 
@@ -864,6 +903,135 @@ const LEADERBOARD = {
     startEl.hidden = true;
     installEl.hidden = false;
   }
+
+  /* ---------- rejtett admin lap: hosszan nyomni a címert ---------- */
+  // Csak belsős védelem: a jelszó SHA-256 hash-e, nem a jelszó maga.
+  const ADMIN_HASH = '7870a682eef2fb914ebb5b15a2eb8c4ea44eaee54793e04ae2b2589e68564409';
+  const adminEl = $('admin'), adminList = $('adminList'), adminBody = $('adminBody');
+  const adminLogin = $('adminLogin'), adminPass = $('adminPass'), adminErr = $('adminErr');
+  const adminTabAll = $('adminTabAll'), adminTabPlayers = $('adminTabPlayers');
+  let adminRows = null, adminTab = 'all', adminReq = 0;
+  let adminUnlocked = false;
+  try { adminUnlocked = sessionStorage.getItem('keepy-admin') === '1'; } catch (e) {}
+
+  function sha256(s) {
+    return crypto.subtle.digest('SHA-256', new TextEncoder().encode(s))
+      .then((b) => Array.from(new Uint8Array(b)).map((x) => x.toString(16).padStart(2, '0')).join(''));
+  }
+  function listStatus(list, text) {
+    list.textContent = '';
+    const li = document.createElement('li');
+    li.className = 'status';
+    li.textContent = text;
+    list.appendChild(li);
+  }
+  function fetchAllScores() {
+    const all = [];
+    const page = (off) => api('scores?select=nickname,score,streak,created_at&order=score.desc,created_at.asc&limit=1000&offset=' + off)
+      .then((r) => r.json())
+      .then((rows) => { all.push(...rows); return rows.length === 1000 ? page(off + 1000) : all; });
+    return page(0);
+  }
+  const fmtWhen = (iso) => new Date(iso).toLocaleString('en-GB', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  function adminRow(rank, name, sub, val, unit) {
+    const li = document.createElement('li');
+    const r = document.createElement('span'); r.className = 'rank'; r.textContent = rank;
+    const n = document.createElement('span'); n.className = 'name'; n.textContent = name;
+    const w = document.createElement('span'); w.className = 'when'; w.textContent = sub; n.appendChild(w);
+    const v = document.createElement('span'); v.className = 'val'; v.textContent = val;
+    if (unit) { const u = document.createElement('small'); u.textContent = unit; v.appendChild(u); }
+    li.append(r, n, v);
+    return li;
+  }
+  function playerStats(rows) {
+    const map = new Map();
+    rows.forEach((row) => {
+      const key = row.nickname.trim().toLowerCase();
+      let p = map.get(key);
+      if (!p) { p = { name: row.nickname.trim(), games: 0, best: 0, last: row.created_at }; map.set(key, p); }
+      p.games++;
+      p.best = Math.max(p.best, row.score);
+      if (row.created_at > p.last) { p.last = row.created_at; p.name = row.nickname.trim(); }
+    });
+    return Array.from(map.values()).sort((a, b) => b.games - a.games || b.best - a.best);
+  }
+  function renderAdmin() {
+    adminTabAll.setAttribute('aria-selected', String(adminTab === 'all'));
+    adminTabPlayers.setAttribute('aria-selected', String(adminTab === 'players'));
+    if (!adminRows) return;
+    const frag = document.createDocumentFragment();
+    if (adminTab === 'all') {
+      adminRows.forEach((row, i) => frag.appendChild(adminRow(i + 1, row.nickname, fmtWhen(row.created_at) + ' · streak ' + row.streak, row.score, 'points')));
+    } else {
+      playerStats(adminRows).forEach((p, i) => frag.appendChild(adminRow(i + 1, p.name, 'best ' + p.best + ' · last ' + fmtWhen(p.last), p.games, p.games === 1 ? 'game' : 'games')));
+    }
+    adminList.textContent = '';
+    if (!frag.childNodes.length) listStatus(adminList, T.empty); else adminList.appendChild(frag);
+    adminList.scrollTop = 0;
+  }
+  function showAdminData() {
+    adminLogin.hidden = true;
+    adminErr.hidden = true;
+    adminBody.hidden = false;
+    adminList.hidden = false;
+    $('adminGames').textContent = '–';
+    $('adminPlayers').textContent = '–';
+    listStatus(adminList, T.loading);
+    const req = ++adminReq;
+    fetchAllScores()
+      .then((rows) => {
+        if (req !== adminReq) return;
+        adminRows = rows;
+        $('adminGames').textContent = rows.length.toLocaleString('en-US');
+        $('adminPlayers').textContent = playerStats(rows).length;
+        renderAdmin();
+      })
+      .catch(() => { if (req === adminReq) listStatus(adminList, T.loadError); });
+  }
+  function openAdmin() {
+    adminEl.hidden = false;
+    buzz(20);
+    if (adminUnlocked) { showAdminData(); return; }
+    adminBody.hidden = true;
+    adminList.hidden = true;
+    adminErr.hidden = true;
+    adminLogin.hidden = false;
+    adminPass.value = '';
+    adminPass.focus();
+  }
+  function closeAdmin() { adminEl.hidden = true; adminReq++; }
+
+  adminLogin.addEventListener('submit', (e) => {
+    e.preventDefault();
+    sha256(adminPass.value).then((h) => {
+      if (h !== ADMIN_HASH) {
+        adminErr.textContent = 'Wrong password';
+        adminErr.hidden = false;
+        adminPass.select();
+        return;
+      }
+      adminUnlocked = true;
+      try { sessionStorage.setItem('keepy-admin', '1'); } catch (err) {}
+      adminPass.blur();
+      showAdminData();
+    });
+  });
+  adminPass.addEventListener('input', () => { adminErr.hidden = true; });
+  adminTabAll.addEventListener('click', () => { adminTab = 'all'; renderAdmin(); });
+  adminTabPlayers.addEventListener('click', () => { adminTab = 'players'; renderAdmin(); });
+  $('adminClose').addEventListener('click', closeAdmin);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !adminEl.hidden) closeAdmin(); });
+
+  const crestEl = $('crest');
+  let pressTimer = null;
+  crestEl.addEventListener('pointerdown', () => {
+    if (state === 'play') return;
+    clearTimeout(pressTimer);
+    pressTimer = setTimeout(openAdmin, 1500);
+  });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach((t) => crestEl.addEventListener(t, () => clearTimeout(pressTimer)));
+  crestEl.addEventListener('contextmenu', (e) => e.preventDefault());
 
   function gameOver() {
     state = 'over';
