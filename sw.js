@@ -1,5 +1,5 @@
 // Bump this when you change any file, so phones pick up the new version.
-const VERSION = 'keepy-uppy-v5';
+const VERSION = 'keepy-uppy-v6';
 const SHELL = [
   './',
   './index.html',
@@ -40,7 +40,28 @@ self.addEventListener('fetch', (event) => {
 
   if (url.origin !== location.origin) return;
 
-  // App shell: cache first, fall back to network, then to the cached index
+  // The page itself: network first so updates show up right away;
+  // the cached copy is used offline or if the network takes longer than 4 s.
+  if (req.mode === 'navigate' || url.pathname.endsWith('/index.html')) {
+    const network = fetch(req, { cache: 'no-cache' }).then((res) => {
+      if (res.ok) {
+        const copy = res.clone();
+        caches.open(VERSION).then((c) => c.put('./index.html', copy));
+      }
+      return res;
+    });
+    const cached = () => caches.match('./index.html').then((hit) => hit || caches.match(req, { ignoreSearch: true }));
+    const timeout = new Promise((resolve) => setTimeout(resolve, 4000));
+    event.respondWith(
+      Promise.race([network, timeout.then(() => cached())])
+        .then((res) => res || network)
+        .catch(() => cached())
+        .then((res) => res || network)
+    );
+    return;
+  }
+
+  // Icons, manifest: cache first, fall back to network, then to the cached index
   event.respondWith(
     caches.match(req, { ignoreSearch: true }).then((hit) =>
       hit || fetch(req).then((res) => {

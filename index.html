@@ -1112,6 +1112,14 @@ const LEADERBOARD = {
 </script>
 <script>
 if ('serviceWorker' in navigator) {
+  // Ha új verzió aktiválódik, a kezdőképernyőn azonnal újratöltünk – játék közben soha.
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded) return;
+    const idle = ['start', 'install'].some((id) => { const el = document.getElementById(id); return el && !el.hidden; });
+    if (idle) { reloaded = true; location.reload(); }
+  });
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js').catch((e) => console.warn('Service worker registration failed', e));
   });
