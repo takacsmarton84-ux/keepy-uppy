@@ -261,6 +261,35 @@ body { font-family: var(--font); color: var(--ink); }
 .lb-list .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lb-list .val { font-weight: 800; font-size: 17px; }
 .lb-list li.status { display: block; border: 0; color: var(--card-muted); text-align: center; padding: 18px 8px; }
+#install .card { max-height: calc(100vh - 48px); overflow-y: auto; }
+#install .card h1 { font-size: 21px; }
+#install .card p { margin-bottom: 14px; font-size: 14px; }
+.steps { list-style: none; margin: 0; padding: 0; }
+.steps li {
+  display: grid;
+  grid-template-columns: 24px 1fr 24px;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 0;
+  border-top: 1px solid rgba(127, 140, 150, 0.2);
+  font-size: 14px;
+  line-height: 1.4;
+}
+.steps li b { font-weight: 700; }
+.steps .num {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  background: rgba(60, 195, 196, 0.2);
+  font-weight: 700;
+  font-size: 12px;
+  display: flex; align-items: center; justify-content: center;
+}
+.steps svg { width: 22px; height: 22px; color: var(--card-muted); }
+#instOk { margin-top: 12px; }
+#instInstallBtn { margin-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+#instInstallBtn[hidden] { display: none; }
+#instInstallBtn svg { width: 20px; height: 20px; flex: none; }
+.card button.ghost { background: none; color: var(--card-muted); font: 600 14px var(--font); padding: 10px; margin-top: 4px; }
 @media (prefers-reduced-motion: reduce) {
   .score { transition: none; }
   .toast.show { animation-duration: 1.4s; }
@@ -290,6 +319,22 @@ body { font-family: var(--font); color: var(--ink); }
     <p id="startText"></p>
     <button id="startBtn"></button>
     <button class="secondary lb-open" id="lbStartBtn" hidden></button>
+  </div>
+</div>
+
+<div class="overlay" id="install" hidden>
+  <div class="card">
+    <div class="pill" id="instPill"></div>
+    <h1 id="instTitle"></h1>
+    <p id="instText"></p>
+    <div class="tabs" role="tablist">
+      <button role="tab" id="instTabIos" aria-selected="true"></button>
+      <button role="tab" id="instTabAndroid" aria-selected="false"></button>
+    </div>
+    <button id="instInstallBtn" hidden></button>
+    <ol class="steps" id="instSteps"></ol>
+    <button id="instOk"></button>
+    <button class="ghost" id="instSkip"></button>
   </div>
 </div>
 
@@ -371,7 +416,29 @@ const BRAND = {
     loading: 'Loading…',
     empty: 'No scores yet – be the first!',
     loadError: 'Couldn’t load the leaderboard. Check your connection.',
-    close: 'Close'
+    close: 'Close',
+    installPill: 'Before you play',
+    installTitle: 'Add Keepy-uppy to your home screen',
+    installText: 'It opens full screen like a real app, works offline, and keeps your nickname.',
+    installIos: 'iPhone',
+    installAndroid: 'Android',
+    installBtn: 'Install app',
+    installOk: 'Got it',
+    installSkip: 'Play in the browser instead',
+    // **…** = félkövér
+    iosSteps: [
+      'Tap **⋯** at the bottom of Safari, then **Share**',
+      'Scroll down and tap **Add to Home Screen**',
+      'Tap **Add**, then open the game from your home screen'
+    ],
+    androidSteps: [
+      'Tap **⋮** in the top right of Chrome',
+      'Tap **Add to home screen**, then **Install**'
+    ],
+    androidStepsAlt: [
+      'Or tap **⋮** in the top right of Chrome',
+      'Tap **Add to home screen**, then **Install**'
+    ]
   }
 };
 
@@ -712,6 +779,89 @@ const LEADERBOARD = {
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !lbEl.hidden) closeLeaderboard(); });
   window.addEventListener('online', () => flush());
   flush();
+
+  /* ---------- telepítési útmutató (főképernyőre tétel) ---------- */
+  const ua = navigator.userAgent || '';
+  const isIos = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  const isAndroid = /Android/.test(ua);
+  const isStandalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+  const installEl = $('install'), instSteps = $('instSteps'), instInstallBtn = $('instInstallBtn');
+  const instTabIos = $('instTabIos'), instTabAndroid = $('instTabAndroid');
+  const svg = (d) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
+  const ICON = {
+    share: svg('<path d="M8 10H6v10h12V10h-2M12 3v12M8.5 6.5 12 3l3.5 3.5"/>'),
+    plus: svg('<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M12 8v8M8 12h8"/>'),
+    check: svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>'),
+    dots: svg('<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>'),
+    phone: svg('<rect x="6" y="3" width="12" height="18" rx="2"/><path d="M12 8v6M9.5 11.5 12 14l2.5-2.5"/>'),
+    download: svg('<path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19h14"/>')
+  };
+  let installPrompt = null;
+  let instTab = isAndroid ? 'android' : 'ios';
+
+  $('instPill').textContent = T.installPill;
+  $('instTitle').textContent = T.installTitle;
+  $('instText').textContent = T.installText;
+  instTabIos.textContent = T.installIos;
+  instTabAndroid.textContent = T.installAndroid;
+  instInstallBtn.innerHTML = ICON.download;
+  instInstallBtn.appendChild(document.createTextNode(T.installBtn));
+  $('instOk').textContent = T.installOk;
+  $('instSkip').textContent = T.installSkip;
+
+  function renderInstall() {
+    const android = instTab === 'android';
+    const canPrompt = android && !!installPrompt;
+    instTabIos.setAttribute('aria-selected', String(!android));
+    instTabAndroid.setAttribute('aria-selected', String(android));
+    instInstallBtn.hidden = !canPrompt;
+    $('instOk').hidden = canPrompt;
+    const steps = android ? (canPrompt ? T.androidStepsAlt : T.androidSteps) : T.iosSteps;
+    const icons = android ? [ICON.dots, ICON.phone] : [ICON.share, ICON.plus, ICON.check];
+    instSteps.textContent = '';
+    steps.forEach((text, i) => {
+      const li = document.createElement('li');
+      const num = document.createElement('span'); num.className = 'num'; num.textContent = i + 1;
+      const body = document.createElement('span');
+      text.split('**').forEach((part, j) => {
+        if (!part) return;
+        if (j % 2) { const b = document.createElement('b'); b.textContent = part; body.appendChild(b); }
+        else body.appendChild(document.createTextNode(part));
+      });
+      const ic = document.createElement('span'); ic.innerHTML = icons[i] || '';
+      li.append(num, body, ic);
+      instSteps.appendChild(li);
+    });
+  }
+  function closeInstall() {
+    installEl.hidden = true;
+    startEl.hidden = false;
+    $('startBtn').focus();
+  }
+  instTabIos.addEventListener('click', () => { instTab = 'ios'; renderInstall(); });
+  instTabAndroid.addEventListener('click', () => { instTab = 'android'; renderInstall(); });
+  $('instOk').addEventListener('click', closeInstall);
+  $('instSkip').addEventListener('click', closeInstall);
+  instInstallBtn.addEventListener('click', () => {
+    if (!installPrompt) return;
+    const p = installPrompt;
+    installPrompt = null;
+    p.prompt();
+    p.userChoice.then((c) => { if (c && c.outcome === 'accepted') closeInstall(); else renderInstall(); }).catch(renderInstall);
+  });
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    installPrompt = e;
+    if (!installEl.hidden) renderInstall();
+  });
+  window.addEventListener('appinstalled', () => { installPrompt = null; if (!installEl.hidden) closeInstall(); });
+
+  // csak telefonon, böngészőben – a telepített appban soha
+  if ((isIos || isAndroid) && !isStandalone) {
+    renderInstall();
+    startEl.hidden = true;
+    installEl.hidden = false;
+  }
 
   function gameOver() {
     state = 'over';
