@@ -3,7 +3,7 @@
 try { importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js'); } catch (e) {}
 
 // Bump this when you change any file, so phones pick up the new version.
-const VERSION = 'keepy-uppy-v11';
+const VERSION = 'keepy-uppy-v12';
 const SHELL = [
   './',
   './index.html',
@@ -17,8 +17,31 @@ const SHELL = [
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  // cache: 'reload' skips the browser's HTTP cache (GitHub Pages keeps files for 10 min),
+  // so a new version never stores an old copy of a file.
+  event.waitUntil(
+    caches.open(VERSION)
+      .then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: 'reload' }))))
+      .then(() => self.skipWaiting())
+  );
 });
+
+// Network first, with the cached copy used offline or if the network takes longer than 4 s.
+function networkFirst(req, cacheKey) {
+  const network = fetch(req, { cache: 'no-cache' }).then((res) => {
+    if (res.ok) {
+      const copy = res.clone();
+      caches.open(VERSION).then((c) => c.put(cacheKey, copy));
+    }
+    return res;
+  });
+  const cached = () => caches.match(cacheKey).then((hit) => hit || caches.match(req, { ignoreSearch: true }));
+  const timeout = new Promise((resolve) => setTimeout(resolve, 4000));
+  return Promise.race([network, timeout.then(() => cached())])
+    .then((res) => res || network)
+    .catch(() => cached())
+    .then((res) => res || network);
+}
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
@@ -45,24 +68,16 @@ self.addEventListener('fetch', (event) => {
 
   if (url.origin !== location.origin) return;
 
-  // The page itself: network first so updates show up right away;
-  // the cached copy is used offline or if the network takes longer than 4 s.
+  // The page itself: network first so updates show up right away.
   if (req.mode === 'navigate' || url.pathname.endsWith('/index.html')) {
-    const network = fetch(req, { cache: 'no-cache' }).then((res) => {
-      if (res.ok) {
-        const copy = res.clone();
-        caches.open(VERSION).then((c) => c.put('./index.html', copy));
-      }
-      return res;
-    });
-    const cached = () => caches.match('./index.html').then((hit) => hit || caches.match(req, { ignoreSearch: true }));
-    const timeout = new Promise((resolve) => setTimeout(resolve, 4000));
-    event.respondWith(
-      Promise.race([network, timeout.then(() => cached())])
-        .then((res) => res || network)
-        .catch(() => cached())
-        .then((res) => res || network)
-    );
+    event.respondWith(networkFirst(req, './index.html'));
+    return;
+  }
+
+  // Our own scripts (share.js): network first too, so they always match the page.
+  if (url.pathname.endsWith('.js') && !url.pathname.endsWith('/sw.js')) {
+    url.search = '';
+    event.respondWith(networkFirst(req, url.href));
     return;
   }
 
