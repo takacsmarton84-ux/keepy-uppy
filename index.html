@@ -15,6 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 <style>
 :root {
   --bg: #0c1e2c;
@@ -334,6 +335,7 @@ body { font-family: var(--font); color: var(--ink); }
     <p id="startText"></p>
     <button id="startBtn"></button>
     <button class="secondary lb-open" id="lbStartBtn" hidden></button>
+    <button class="secondary" id="pushBtn" hidden></button>
   </div>
 </div>
 
@@ -458,6 +460,7 @@ const BRAND = {
     empty: 'No scores yet – be the first!',
     loadError: 'Couldn’t load the leaderboard. Check your connection.',
     close: 'Close',
+    pushOn: 'Turn on notifications',
     installPill: 'Before you play',
     installTitle: 'Add Keepy-uppy to your home screen',
     installText: 'It opens full screen like a real app, works offline, and keeps your nickname.',
@@ -757,6 +760,7 @@ const LEADERBOARD = {
     if (!v) { nickInput.focus(); return; }
     nick = v;
     store.set('keepy-nick', nick);
+    tagNick();
     nickInput.blur();
     refreshOverLeaderboard();
   });
@@ -1035,6 +1039,48 @@ const LEADERBOARD = {
   ['pointerup', 'pointerleave', 'pointercancel'].forEach((t) => crestEl.addEventListener(t, () => clearTimeout(pressTimer)));
   crestEl.addEventListener('contextmenu', (e) => e.preventDefault());
 
+  /* ---------- push értesítések (OneSignal) ---------- */
+  const ONESIGNAL_APP_ID = '8e87e420-b0ad-4001-adcf-ba5e68c591f0';
+  const pushBtn = $('pushBtn');
+  pushBtn.textContent = T.pushOn;
+  const appScope = new URL('./', location.href).pathname;          // pl. /keepy-uppy/
+  window.OneSignalDeferred = window.OneSignalDeferred || [];
+
+  function refreshPushBtn(OneSignal) {
+    const supported = OneSignal.Notifications.isPushSupported();
+    const perm = OneSignal.Notifications.permissionNative;           // 'default' | 'granted' | 'denied'
+    const subscribed = OneSignal.User.PushSubscription.optedIn;
+    pushBtn.hidden = !supported || perm === 'denied' || (perm === 'granted' && subscribed);
+  }
+  function tagNick() {
+    if (!nick) return;
+    window.OneSignalDeferred.push((OneSignal) => { try { OneSignal.User.addTag('nickname', nick); } catch (e) {} });
+  }
+  window.OneSignalDeferred.push(async (OneSignal) => {
+    try {
+      await OneSignal.init({
+        appId: ONESIGNAL_APP_ID,
+        // ugyanazt a service workert használja, mint a játék (offline + push egyben)
+        serviceWorkerPath: appScope.slice(1) + 'sw.js',
+        serviceWorkerParam: { scope: appScope },
+        notifyButton: { enable: false }
+      });
+      refreshPushBtn(OneSignal);
+      OneSignal.Notifications.addEventListener('permissionChange', () => refreshPushBtn(OneSignal));
+      OneSignal.User.PushSubscription.addEventListener('change', () => refreshPushBtn(OneSignal));
+      pushBtn.addEventListener('click', async () => {
+        try {
+          if (OneSignal.Notifications.permissionNative === 'granted') await OneSignal.User.PushSubscription.optIn();
+          else await OneSignal.Notifications.requestPermission();
+        } catch (e) { console.warn('Push opt-in failed', e); }
+        refreshPushBtn(OneSignal);
+      });
+      tagNick();
+    } catch (e) {
+      console.warn('OneSignal init failed', e);
+    }
+  });
+
   function gameOver() {
     state = 'over';
     buzz([30, 40, 60]);
@@ -1291,7 +1337,11 @@ if ('serviceWorker' in navigator) {
     if (idle) { reloaded = true; location.reload(); }
   });
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch((e) => console.warn('Service worker registration failed', e));
+    // A OneSignal ugyanezt a sw.js-t regisztrálja (saját paraméterekkel) – ha már van regisztráció,
+    // nem írjuk felül, különben a kettő minden betöltéskor cserélgetné egymást.
+    navigator.serviceWorker.getRegistration('./')
+      .then((reg) => reg || navigator.serviceWorker.register('sw.js'))
+      .catch((e) => console.warn('Service worker registration failed', e));
   });
 }
 </script>

@@ -1,5 +1,9 @@
+// OneSignal push notifications (push + notification click handlers).
+// Wrapped so the game still works offline if the CDN cannot be reached.
+try { importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js'); } catch (e) {}
+
 // Bump this when you change any file, so phones pick up the new version.
-const VERSION = 'keepy-uppy-v8';
+const VERSION = 'keepy-uppy-v9';
 const SHELL = [
   './',
   './index.html',
