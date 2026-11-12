@@ -184,6 +184,83 @@ body { font-family: var(--font); color: var(--ink); }
   cursor: pointer;
 }
 .card button:focus-visible { outline: 3px solid var(--tier); outline-offset: 3px; }
+.card button.secondary {
+  margin-top: 10px;
+  background: transparent;
+  color: var(--card-ink);
+  box-shadow: inset 0 0 0 1.5px var(--card-muted);
+}
+.card button.link {
+  width: auto;
+  padding: 0;
+  background: none;
+  color: var(--accent);
+  font: 600 14px var(--font);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.card p.sub { margin: -8px 0 16px; font-size: 14px; }
+.card p.sub b { color: var(--card-ink); }
+.nick { margin: 0 0 16px; }
+.nick label { display: block; font-size: 14px; font-weight: 600; color: var(--card-muted); margin-bottom: 8px; }
+.nick .row { display: flex; gap: 8px; }
+.nick input {
+  flex: 1;
+  min-width: 0;
+  font: 600 17px var(--font);
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1.5px solid var(--card-muted);
+  background: transparent;
+  color: var(--card-ink);
+  -webkit-user-select: text;
+  user-select: text;
+  touch-action: manipulation;
+}
+.nick input:focus { outline: none; border-color: var(--accent); }
+.nick .row button { width: auto; padding: 12px 18px; font-size: 16px; }
+#lb { background: rgba(12, 30, 44, 0.6); }
+.tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 10px;
+  border-radius: 12px;
+  background: rgba(127, 140, 150, 0.16);
+}
+.card .tabs button {
+  padding: 9px 6px;
+  border-radius: 9px;
+  font-size: 14px;
+  background: transparent;
+  color: var(--card-muted);
+}
+.card .tabs button[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); }
+.lb-list {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  max-height: min(48vh, 420px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+.lb-list li {
+  display: grid;
+  grid-template-columns: 30px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 8px;
+  border-bottom: 1px solid rgba(127, 140, 150, 0.2);
+  font-size: 15px;
+}
+.lb-list li.me { background: rgba(60, 195, 196, 0.16); border-radius: 10px; border-bottom-color: transparent; }
+.lb-list .rank { font-weight: 700; color: var(--card-muted); text-align: right; }
+.lb-list .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lb-list .val { font-weight: 800; font-size: 17px; }
+.lb-list li.status { display: block; border: 0; color: var(--card-muted); text-align: center; padding: 18px 8px; }
 @media (prefers-reduced-motion: reduce) {
   .score { transition: none; }
   .toast.show { animation-duration: 1.4s; }
@@ -212,6 +289,7 @@ body { font-family: var(--font); color: var(--ink); }
     <h1 id="startTitle"></h1>
     <p id="startText"></p>
     <button id="startBtn"></button>
+    <button class="secondary lb-open" id="lbStartBtn" hidden></button>
   </div>
 </div>
 
@@ -220,7 +298,28 @@ body { font-family: var(--font); color: var(--ink); }
     <div class="pill" id="overPill"></div>
     <div class="result"><div class="big" id="finalScore">0</div><span id="finalUnit"></span></div>
     <p id="overInfo"></p>
+    <form class="nick" id="nickBox" hidden>
+      <label for="nickInput" id="nickLabel"></label>
+      <div class="row">
+        <input id="nickInput" maxlength="20" autocomplete="nickname" autocapitalize="words" enterkeyhint="done" spellcheck="false">
+        <button type="submit" id="nickSave"></button>
+      </div>
+    </form>
+    <p class="sub" id="submitInfo" hidden></p>
     <button id="againBtn"></button>
+    <button class="secondary lb-open" id="lbOverBtn" hidden></button>
+  </div>
+</div>
+
+<div class="overlay" id="lb" hidden>
+  <div class="card" role="dialog" aria-modal="true" aria-labelledby="lbTitle">
+    <div class="pill" id="lbTitle"></div>
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tabScore" aria-selected="true"></button>
+      <button role="tab" id="tabStreak" aria-selected="false"></button>
+    </div>
+    <ol class="lb-list" id="lbList"></ol>
+    <button id="lbClose"></button>
   </div>
 </div>
 
@@ -257,8 +356,33 @@ const BRAND = {
     windLeft: '← Wind',
     windRight: 'Wind →',
     windOn: 'The wind is picking up',
-    again: 'Play again'
+    again: 'Play again',
+    leaderboard: 'Leaderboard',
+    mostPoints: 'Most points',
+    perfectStreak: 'Perfect streak',
+    nickLabel: 'Pick a nickname for the leaderboard',
+    nickPlaceholder: 'Nickname',
+    nickSave: 'Save',
+    submitting: 'Submitting as',
+    submitted: 'On the leaderboard as',
+    playingAs: 'Playing as',
+    offline: 'saved, it will be submitted when you’re back online.',
+    change: 'Change',
+    loading: 'Loading…',
+    empty: 'No scores yet – be the first!',
+    loadError: 'Couldn’t load the leaderboard. Check your connection.',
+    close: 'Close'
   }
+};
+
+/* ---------------------------------------------------------------
+   KÖZÖS RANGLISTA (Supabase) – a supabase/setup.sql futtatása után
+   ide kell a Project URL és a publishable/anon key.
+   Ha üres, a ranglista gombok nem jelennek meg.
+   --------------------------------------------------------------- */
+const LEADERBOARD = {
+  supabaseUrl: '',
+  supabaseKey: ''
 };
 
 (function () {
@@ -404,7 +528,10 @@ const BRAND = {
     if (state === 'ready') { if (kick(e.clientX, e.clientY)) state = 'play'; }
     else if (state === 'play') kick(e.clientX, e.clientY);
   }, { passive: false });
-  document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+  document.addEventListener('touchmove', (e) => {
+    if (e.target.closest && e.target.closest('.lb-list')) return; // a ranglista görgethető
+    e.preventDefault();
+  }, { passive: false });
   document.addEventListener('gesturestart', (e) => e.preventDefault());
   document.addEventListener('dblclick', (e) => e.preventDefault());
 
@@ -418,6 +545,174 @@ const BRAND = {
   $('startBtn').addEventListener('click', begin);
   $('againBtn').addEventListener('click', begin);
 
+  /* ---------- közös ranglista ---------- */
+  const lbOn = !!(LEADERBOARD.supabaseUrl && LEADERBOARD.supabaseKey);
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  };
+  let nick = store.get('keepy-nick') || '';
+  let deviceId = store.get('keepy-device');
+  if (!deviceId) {
+    deviceId = (self.crypto && crypto.randomUUID) ? crypto.randomUUID()
+      : Date.now().toString(36) + Math.random().toString(36).slice(2);
+    store.set('keepy-device', deviceId);
+  }
+  function loadQueue() { try { return JSON.parse(store.get('keepy-queue') || '[]'); } catch (e) { return []; } }
+  function saveQueue(q) { store.set('keepy-queue', JSON.stringify(q.slice(-100))); }
+
+  function api(path, opts) {
+    opts = opts || {};
+    const key = LEADERBOARD.supabaseKey;
+    const headers = Object.assign({ apikey: key, 'Content-Type': 'application/json' }, opts.headers || {});
+    if (key.indexOf('sb_') !== 0) headers.Authorization = 'Bearer ' + key; // régi (JWT) anon key
+    return fetch(LEADERBOARD.supabaseUrl.replace(/\/+$/, '') + '/rest/v1/' + path, Object.assign({}, opts, { headers }))
+      .then((r) => { if (!r.ok) { const err = new Error('HTTP ' + r.status); err.status = r.status; throw err; } return r; });
+  }
+
+  // A még be nem küldött eredményeket egyben küldi el. 'none' | 'ok' | 'fail'
+  let flushing = null;
+  function flush() {
+    if (!lbOn || !nick) return Promise.resolve('none');
+    if (flushing) return flushing;
+    const q = loadQueue();
+    if (!q.length) return Promise.resolve('none');
+    const rows = q.map((e) => ({ nickname: nick, score: e.s, streak: Math.min(e.k, e.s), device_id: deviceId }));
+    flushing = api('scores', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(rows) })
+      .then(() => { saveQueue(loadQueue().slice(q.length)); return 'ok'; })
+      .catch((err) => {
+        // hibás adat (400) soha nem menne át – eldobjuk, hogy ne akadjon el a sor
+        if (err.status === 400) saveQueue(loadQueue().slice(q.length));
+        return 'fail';
+      })
+      .finally(() => { flushing = null; });
+    return flushing;
+  }
+
+  const nickBox = $('nickBox'), nickInput = $('nickInput'), submitInfo = $('submitInfo');
+  const lbEl = $('lb'), lbList = $('lbList'), tabScore = $('tabScore'), tabStreak = $('tabStreak');
+  $('nickLabel').textContent = T.nickLabel;
+  nickInput.placeholder = T.nickPlaceholder;
+  $('nickSave').textContent = T.nickSave;
+  $('lbTitle').textContent = T.leaderboard;
+  tabScore.textContent = T.mostPoints;
+  tabStreak.textContent = T.perfectStreak;
+  $('lbClose').textContent = T.close;
+  document.querySelectorAll('.lb-open').forEach((b) => {
+    b.textContent = T.leaderboard;
+    b.hidden = !lbOn;
+    b.addEventListener('click', openLeaderboard);
+  });
+
+  function showSubmitInfo(prefix, suffix) {
+    submitInfo.textContent = prefix + ' ';
+    const b = document.createElement('b');
+    b.textContent = nick;
+    submitInfo.appendChild(b);
+    submitInfo.appendChild(document.createTextNode(suffix ? ' – ' + suffix + ' ' : ' · '));
+    const change = document.createElement('button');
+    change.type = 'button';
+    change.className = 'link';
+    change.textContent = T.change;
+    change.addEventListener('click', () => {
+      submitInfo.hidden = true;
+      nickInput.value = nick;
+      nickBox.hidden = false;
+      nickInput.focus();
+      nickInput.select();
+    });
+    submitInfo.appendChild(change);
+    submitInfo.hidden = false;
+  }
+
+  function refreshOverLeaderboard() {
+    if (!lbOn) return;
+    if (!nick) {
+      submitInfo.hidden = true;
+      nickBox.hidden = false;
+      return;
+    }
+    nickBox.hidden = true;
+    if (!loadQueue().length) { showSubmitInfo(T.playingAs); return; }
+    showSubmitInfo(T.submitting);
+    flush().then((res) => {
+      if (overEl.hidden || !nickBox.hidden) return;
+      if (res === 'ok') showSubmitInfo(T.submitted);
+      else if (res === 'fail') showSubmitInfo(T.playingAs, T.offline);
+      else showSubmitInfo(T.playingAs);
+    });
+  }
+
+  nickBox.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const v = nickInput.value.replace(/\s+/g, ' ').trim().slice(0, 20);
+    if (!v) { nickInput.focus(); return; }
+    nick = v;
+    store.set('keepy-nick', nick);
+    nickInput.blur();
+    refreshOverLeaderboard();
+  });
+
+  function recordResult(s, k) {
+    if (!lbOn || s <= 0) return;
+    const q = loadQueue();
+    q.push({ s: s, k: k, t: Date.now() });
+    saveQueue(q);
+  }
+
+  let lbTab = 'score', lbReq = 0;
+  function lbStatus(text) {
+    lbList.textContent = '';
+    const li = document.createElement('li');
+    li.className = 'status';
+    li.textContent = text;
+    lbList.appendChild(li);
+  }
+  function renderLeaderboard() {
+    const req = ++lbReq;
+    const col = lbTab === 'score' ? 'score' : 'streak';
+    tabScore.setAttribute('aria-selected', String(lbTab === 'score'));
+    tabStreak.setAttribute('aria-selected', String(lbTab === 'streak'));
+    lbStatus(T.loading);
+    flush()
+      .then(() => api('leaderboard_' + col + '?select=nickname,' + col + '&order=' + col + '.desc,created_at.asc&limit=100'))
+      .then((r) => r.json())
+      .then((rows) => {
+        if (req !== lbReq) return;
+        if (!rows.length) { lbStatus(T.empty); return; }
+        lbList.textContent = '';
+        const me = nick.toLowerCase();
+        let meEl = null;
+        rows.forEach((row, i) => {
+          const li = document.createElement('li');
+          const rank = document.createElement('span'); rank.className = 'rank'; rank.textContent = i + 1;
+          const name = document.createElement('span'); name.className = 'name'; name.textContent = row.nickname;
+          const val = document.createElement('span'); val.className = 'val'; val.textContent = row[col];
+          li.append(rank, name, val);
+          if (me && row.nickname.toLowerCase() === me) { li.className = 'me'; meEl = li; }
+          lbList.appendChild(li);
+        });
+        lbList.scrollTop = 0;
+        if (meEl && meEl.offsetTop > lbList.clientHeight) meEl.scrollIntoView({ block: 'center' });
+      })
+      .catch(() => { if (req === lbReq) lbStatus(T.loadError); });
+  }
+  function openLeaderboard() {
+    lbEl.hidden = false;
+    renderLeaderboard();
+    $('lbClose').focus();
+  }
+  function closeLeaderboard() {
+    lbEl.hidden = true;
+    (overEl.hidden ? $('startBtn') : $('againBtn')).focus();
+  }
+  tabScore.addEventListener('click', () => { lbTab = 'score'; renderLeaderboard(); });
+  tabStreak.addEventListener('click', () => { lbTab = 'streak'; renderLeaderboard(); });
+  $('lbClose').addEventListener('click', closeLeaderboard);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !lbEl.hidden) closeLeaderboard(); });
+  window.addEventListener('online', () => flush());
+  flush();
+
   function gameOver() {
     state = 'over';
     buzz([30, 40, 60]);
@@ -430,7 +725,8 @@ const BRAND = {
     $('finalScore').textContent = score;
     $('overPill').textContent = isRecord ? T.record : T.over;
     $('overInfo').textContent = bestStreak >= 2 ? T.streak + ': ' + bestStreak : T.best + ': ' + best;
-    setTimeout(() => { overEl.hidden = false; $('againBtn').focus(); }, 450);
+    recordResult(score, bestStreak);
+    setTimeout(() => { overEl.hidden = false; refreshOverLeaderboard(); if (nickBox.hidden) $('againBtn').focus(); }, 450);
   }
 
   function update(dt) {

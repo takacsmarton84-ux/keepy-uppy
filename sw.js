@@ -1,5 +1,5 @@
 // Bump this when you change any file, so phones pick up the new version.
-const VERSION = 'keepy-uppy-v1';
+const VERSION = 'keepy-uppy-v2';
 const SHELL = [
   './',
   './index.html',
