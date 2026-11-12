@@ -289,6 +289,8 @@ body { font-family: var(--font); color: var(--ink); }
 #instInstallBtn { margin-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; }
 #instInstallBtn[hidden] { display: none; }
 #instInstallBtn svg { width: 20px; height: 20px; flex: none; }
+.top { z-index: 2; }            /* a címer a kezdő/game over kártya fölött is nyomható */
+#lb, #admin { z-index: 3; }
 #admin { background: rgba(12, 30, 44, 0.7); align-items: center; }
 #admin .card { max-height: calc(100vh - 48px); display: flex; flex-direction: column; }
 #admin .lb-list { max-height: none; flex: 1; min-height: 120px; }
