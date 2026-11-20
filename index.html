@@ -64,7 +64,11 @@ html, body {
   overscroll-behavior: none;
 }
 body { font-family: var(--font); color: var(--ink); }
-#game { position: fixed; inset: 0; width: 100vw; height: 100%; display: block; }
+#bg, #game { position: fixed; inset: 0; width: 100vw; height: 100%; display: block; }
+#bg { z-index: 0; }
+.hud { z-index: 1; }              /* a számláló a háttér előtt… */
+#game { z-index: 2; }             /* …de a labda előtte esik le */
+.toast, .wind { z-index: 3; }
 
 .top {
   position: fixed;
@@ -80,21 +84,13 @@ body { font-family: var(--font); color: var(--ink); }
 .club { text-align: center; font-weight: 600; font-size: 17px; letter-spacing: 0.01em; }
 .hud {
   position: fixed;
-  top: calc(env(safe-area-inset-top, 0px) + 62px);
+  top: calc(env(safe-area-inset-top, 0px) + 6px);
   left: 0; right: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
   pointer-events: none;
-}
-.tier {
-  background: var(--tier);
-  color: var(--tier-ink);
-  font-weight: 600;
-  font-size: 14px;
-  padding: 5px 16px;
-  border-radius: 8px;
 }
 .score {
   font-weight: 800;
@@ -290,8 +286,9 @@ body { font-family: var(--font); color: var(--ink); }
 #instInstallBtn { margin-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; }
 #instInstallBtn[hidden] { display: none; }
 #instInstallBtn svg { width: 20px; height: 20px; flex: none; }
-.top { z-index: 2; }            /* a címer a kezdő/game over kártya fölött is nyomható */
-#lb, #admin { z-index: 3; }
+.overlay { z-index: 4; }
+.top { z-index: 5; }            /* a címer a kezdő/game over kártya fölött is nyomható */
+#lb, #admin { z-index: 6; }
 #admin { background: rgba(12, 30, 44, 0.7); align-items: center; }
 #admin .card { max-height: calc(100vh - 48px); display: flex; flex-direction: column; }
 #admin .lb-list { max-height: none; flex: 1; min-height: 120px; }
@@ -313,6 +310,7 @@ body { font-family: var(--font); color: var(--ink); }
 </style>
 </head>
 <body>
+<canvas id="bg"></canvas>
 <canvas id="game"></canvas>
 
 <div class="top">
@@ -321,7 +319,6 @@ body { font-family: var(--font); color: var(--ink); }
   <div></div>
 </div>
 <div class="hud">
-  <div class="tier" id="tier"></div>
   <div class="score" id="score">0</div>
   <div class="best" id="best"></div>
 </div>
@@ -504,7 +501,6 @@ const LEADERBOARD = {
   rootStyle.setProperty('--tier', BRAND.colors.tier);
 
   const T = BRAND.text;
-  $('club').textContent = BRAND.clubName;
   $('startPill').textContent = T.startPill;
   $('startTitle').textContent = T.startTitle;
   $('startText').textContent = T.startText;
@@ -525,8 +521,10 @@ const LEADERBOARD = {
   }
 
   const canvas = $('game');
-  const ctx = canvas.getContext('2d');
-  const scoreEl = $('score'), bestEl = $('best'), tierEl = $('tier');
+  const ctx = canvas.getContext('2d');           // labda + árnyék (a számláló előtt)
+  const bgCanvas = $('bg');
+  const bctx = bgCanvas.getContext('2d');        // stadion, gyep, föld (a számláló mögött)
+  const scoreEl = $('score'), bestEl = $('best');
   const windEl = $('wind'), toastEl = $('toast');
   const startEl = $('start'), overEl = $('over');
 
@@ -542,7 +540,6 @@ const LEADERBOARD = {
   try { best = parseInt(localStorage.getItem('dekazas-dfc-best') || '0', 10) || 0; } catch (e) { best = 0; }
 
   function showBest() { bestEl.textContent = T.best + ': ' + best; }
-  function showTier() { tierEl.textContent = BRAND.levels[Math.min(level, BRAND.levels.length - 1)]; }
   showBest();
 
   function resize() {
@@ -554,6 +551,11 @@ const LEADERBOARD = {
     canvas.style.width = W + 'px';
     canvas.style.height = H + 'px';
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    bgCanvas.width = canvas.width;
+    bgCanvas.height = canvas.height;
+    bgCanvas.style.width = W + 'px';
+    bgCanvas.style.height = H + 'px';
+    bctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     groundY = H - Math.max(56, H * 0.09);
     gravityBase = H * 1.5;
     if (ball) ball.x = Math.min(Math.max(ball.x, ball.r), W - ball.r);
@@ -569,7 +571,6 @@ const LEADERBOARD = {
     ball = { x: W / 2, y: restY(), vx: 0, vy: 0, r: baseRadius(), spinX: 0 };
     scoreEl.textContent = '0';
     windEl.classList.remove('on');
-    showTier();
   }
   reset();
 
@@ -578,7 +579,6 @@ const LEADERBOARD = {
   function setLevel(n) {
     level = n;
     ball.r = baseRadius() * Math.max(0.6, 1 - level * 0.07);
-    showTier();
     if (level >= 3) {
       const dir = Math.random() < 0.5 ? -1 : 1;
       wind = dir * Math.min(0.06 + (level - 3) * 0.025, 0.18) * W;
@@ -629,7 +629,7 @@ const LEADERBOARD = {
 
     if (score % 10 === 0) {
       setLevel(level + 1);
-      toast(level === 3 ? T.windOn : BRAND.levels[Math.min(level, BRAND.levels.length - 1)]);
+      if (level === 3) toast(T.windOn);
     }
     return true;
   }
@@ -1129,6 +1129,7 @@ const LEADERBOARD = {
   const C = BRAND.colors;
 
   function drawBackground() {
+    const ctx = bctx;
     ctx.fillStyle = C.bg;
     ctx.fillRect(0, 0, W, H);
 
@@ -1163,6 +1164,7 @@ const LEADERBOARD = {
   }
 
   function drawGround() {
+    const ctx = bctx;
     const g = ctx.createLinearGradient(0, groundY, 0, H);
     g.addColorStop(0, 'rgba(0,115,122,0.22)');
     g.addColorStop(1, 'rgba(0,115,122,0.06)');
@@ -1319,6 +1321,7 @@ const LEADERBOARD = {
     update(dt / 2); update(dt / 2);
     drawBackground();
     drawGround();
+    ctx.clearRect(0, 0, W, H);
     drawShadow();
     drawBall();
     requestAnimationFrame(frame);
