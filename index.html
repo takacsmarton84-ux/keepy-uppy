@@ -310,32 +310,47 @@ body.playing .top .crest, body.playing .news-btn { visibility: hidden; }
   background: #ff5a5f; border: 2px solid var(--bg);
 }
 .news-dot[hidden] { display: none; }
-#news { background: rgba(12, 30, 44, 0.7); align-items: center; }
-#news .card { max-height: calc(100vh - 48px); display: flex; flex-direction: column; }
-.news-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
-.news-head .pill { margin-bottom: 0; }
-.card button.news-x { width: 36px; height: 36px; padding: 0; background: none; color: var(--card-muted); font-size: 24px; line-height: 1; }
-.card button.news-back { width: auto; padding: 4px 0; background: none; color: var(--accent); font: 600 14px var(--font); }
+#news { padding: 0; background: var(--card); align-items: stretch; }
+#news .card {
+  max-width: none; height: 100%; border-radius: 0; box-shadow: none;
+  padding: env(safe-area-inset-top, 0px) 0 0;
+  display: flex; flex-direction: column;
+}
+.news-head {
+  display: grid; grid-template-columns: 48px 1fr 48px; align-items: center;
+  height: 56px; padding: 0 8px; flex: none;
+  border-bottom: 1px solid rgba(127, 140, 150, 0.2);
+}
+.news-title { text-align: center; font-weight: 700; font-size: 18px; }
+.card .news-head button {
+  width: 44px; height: 44px; padding: 0; border-radius: 12px;
+  background: none; color: var(--card-ink);
+  display: flex; align-items: center; justify-content: center;
+}
+.card .news-head button[hidden] { display: none; }
+.news-head svg { width: 24px; height: 24px; }
 .news-scroll {
-  flex: 1; min-height: 120px; overflow-y: auto; margin: 6px 0 14px;
+  flex: 1; min-height: 0; overflow-y: auto; margin: 0;
+  padding: 4px 20px calc(env(safe-area-inset-bottom, 0px) + 24px);
   overscroll-behavior: contain; touch-action: pan-y; -webkit-overflow-scrolling: touch;
   -webkit-user-select: text; user-select: text;
 }
 .news-list { list-style: none; margin: 0; padding: 0; }
 .news-list li { border-bottom: 1px solid rgba(127, 140, 150, 0.2); }
 .card .news-list button {
-  display: grid; grid-template-columns: 64px 1fr; gap: 12px; align-items: center;
-  width: 100%; padding: 12px 0; border-radius: 0; background: none; color: var(--card-ink);
+  display: grid; grid-template-columns: 96px 1fr; gap: 14px; align-items: center;
+  width: 100%; padding: 14px 0; border-radius: 0; background: none; color: var(--card-ink);
   text-align: left; font: inherit;
 }
-.news-list .thumb { width: 64px; height: 52px; border-radius: 8px; background: var(--kit, #00737a) center / cover no-repeat; }
+.news-list .thumb { width: 96px; height: 76px; border-radius: 8px; background: var(--kit, #00737a) center / cover no-repeat; }
 .news-list .t { display: block; font-weight: 700; font-size: 15px; line-height: 1.3; }
+.news-list .x { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 13px; line-height: 1.4; color: var(--card-muted); margin-top: 3px; }
 .news-list .d { display: block; font-size: 12px; font-weight: 600; color: var(--card-muted); margin-top: 3px; }
 .news-list .new { color: #ff5a5f; }
 .news-status { text-align: center; color: var(--card-muted); padding: 24px 8px; font-size: 15px; }
-.news-article img { width: 100%; border-radius: 12px; display: block; margin: 4px 0 12px; aspect-ratio: 16 / 9; object-fit: cover; background: rgba(127, 140, 150, 0.16); }
+.news-article img { width: 100%; border-radius: 12px; display: block; margin: 12px 0 12px; aspect-ratio: 16 / 9; object-fit: cover; background: rgba(127, 140, 150, 0.16); }
 .news-article .d { font-size: 12px; font-weight: 600; color: var(--card-muted); }
-.news-article h2 { font-size: 21px; line-height: 1.25; margin: 4px 0 10px; }
+.news-article h2 { font-size: 24px; line-height: 1.25; margin: 4px 0 10px; }
 .news-article h3 { font-size: 17px; margin: 16px 0 6px; }
 .card .news-article p, .news-article li { font-size: 15px; line-height: 1.55; color: var(--card-ink); margin: 0 0 10px; }
 .news-article ul { padding-left: 20px; margin: 0 0 10px; }
@@ -455,12 +470,16 @@ body.playing .top .crest, body.playing .news-btn { visibility: hidden; }
 <div class="overlay" id="news" hidden>
   <div class="card" role="dialog" aria-modal="true" aria-labelledby="newsTitle">
     <div class="news-head">
-      <div class="pill" id="newsTitle">News</div>
-      <button class="news-back" id="newsBack" type="button" hidden>‹ All news</button>
-      <button class="news-x" id="newsX" type="button" aria-label="Close">×</button>
+      <button id="newsX" type="button" aria-label="Back to the game">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+      <button id="newsBack" type="button" aria-label="All news" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <div class="news-title" id="newsTitle">News</div>
+      <span></span>
     </div>
     <div class="news-scroll" id="newsScroll"></div>
-    <button id="newsClose" type="button">Close</button>
   </div>
 </div>
 
@@ -1220,18 +1239,21 @@ const NEWS = {
 
   function showNewsList() {
     newsBack.hidden = true;
+    $('newsX').hidden = false;
     if (!newsItems.length) { newsScroll.innerHTML = '<div class="news-status">No news yet.</div>'; return; }
     const seen = seenAt();
     newsScroll.innerHTML = '<ul class="news-list">' + newsItems.map((n, i) =>
       '<li><button type="button" data-i="' + i + '">' +
       '<span class="thumb"' + (n.img ? ' style="background-image:url(\'' + esc(n.img) + '?w=160&h=130&fit=crop&auto=format\')"' : '') + '></span>' +
       '<span><span class="t">' + esc(n.title) + '</span>' +
+      (n.excerpt ? '<span class="x">' + esc(n.excerpt) + '</span>' : '') +
       '<span class="d">' + (n.publishedAt > seen ? '<span class="new">● New</span> · ' : '') + newsDate(n.publishedAt) + '</span></span>' +
       '</button></li>').join('') + '</ul>';
     newsScroll.scrollTop = 0;
   }
   function showArticle(n) {
-    newsBack.hidden = newsItems.length < 2;
+    newsBack.hidden = false;   // cikkből a bal felső nyíl a hírlistára visz vissza
+    $('newsX').hidden = true;
     newsScroll.innerHTML = '<article class="news-article">' +
       (n.img ? '<img src="' + esc(n.img) + '?w=900&auto=format" alt="' + esc(n.alt || '') + '">' : '') +
       '<div class="d">' + newsDate(n.publishedAt) + '</div>' +
@@ -1253,14 +1275,13 @@ const NEWS = {
     if (item) showArticle(item); else showNewsList();
     newsEl.hidden = false;
     markSeen();
-    $('newsClose').focus();
+    (newsBack.hidden ? $('newsX') : newsBack).focus();
   }
   function closeNews() {
     newsEl.hidden = true;
     (overEl.hidden ? $('startBtn') : $('againBtn')).focus();
   }
   newsBtn.addEventListener('click', () => openNews());
-  $('newsClose').addEventListener('click', closeNews);
   $('newsX').addEventListener('click', closeNews);
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !newsEl.hidden) closeNews(); });
 
