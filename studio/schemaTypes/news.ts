@@ -1,4 +1,4 @@
-import {defineArrayMember, defineField, defineType} from 'sanity'
+import {defineField, defineType} from 'sanity'
 
 // One news item shown in the game's News panel.
 // The game reads published items, newest first (by publishedAt).
@@ -46,42 +46,7 @@ export const news = defineType({
         defineField({name: 'alt', title: 'Image description', type: 'string'}),
       ],
     }),
-    defineField({
-      name: 'body',
-      title: 'Text',
-      type: 'array',
-      of: [
-        defineArrayMember({
-          type: 'block',
-          styles: [
-            {title: 'Normal', value: 'normal'},
-            {title: 'Heading', value: 'h3'},
-          ],
-          lists: [{title: 'Bullet', value: 'bullet'}],
-          marks: {
-            decorators: [
-              {title: 'Bold', value: 'strong'},
-              {title: 'Italic', value: 'em'},
-            ],
-            annotations: [
-              defineArrayMember({
-                name: 'link',
-                title: 'Link',
-                type: 'object',
-                fields: [
-                  defineField({
-                    name: 'href',
-                    title: 'URL',
-                    type: 'url',
-                    validation: (rule) => rule.uri({scheme: ['http', 'https', 'mailto']}),
-                  }),
-                ],
-              }),
-            ],
-          },
-        }),
-      ],
-    }),
+    defineField({name: 'body', title: 'Text', type: 'body'}),
   ],
   orderings: [
     {title: 'Newest first', name: 'publishedDesc', by: [{field: 'publishedAt', direction: 'desc'}]},

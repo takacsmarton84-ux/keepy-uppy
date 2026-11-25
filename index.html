@@ -340,6 +340,22 @@ body.playing .top .crest, body.playing .news-btn { visibility: hidden; }
 .card .news-article p, .news-article li { font-size: 15px; line-height: 1.55; color: var(--card-ink); margin: 0 0 10px; }
 .news-article ul { padding-left: 20px; margin: 0 0 10px; }
 .news-article a { color: var(--accent); }
+.news-article .news-body h2 { font-size: 19px; margin: 18px 0 6px; }
+.news-article h4 { font-size: 15px; margin: 14px 0 4px; }
+.card .news-article p.lead { font-size: 17px; line-height: 1.5; font-weight: 500; }
+.card .news-article p.small { font-size: 13px; color: var(--card-muted); }
+.news-article blockquote { margin: 12px 0; padding: 2px 0 2px 14px; border-left: 3px solid var(--accent); font-style: italic; font-size: 15px; line-height: 1.55; }
+.news-article ol { padding-left: 22px; margin: 0 0 10px; }
+.news-article mark { background: rgba(255, 214, 10, 0.45); color: inherit; border-radius: 3px; padding: 0 2px; }
+.news-article figure { margin: 12px 0; }
+.news-article figure img { margin: 0; aspect-ratio: auto; }
+.news-article figcaption { font-size: 12px; color: var(--card-muted); margin-top: 6px; }
+.news-video { position: relative; aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; background: #000; }
+.news-video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.card .news-article .news-cta {
+  display: block; width: 100%; margin: 14px 0; padding: 14px; border-radius: 12px; border: 0;
+  background: var(--accent); color: var(--accent-ink); font: 700 16px var(--font); text-align: center; text-decoration: none;
+}
 #admin { background: rgba(12, 30, 44, 0.7); align-items: center; }
 #admin .card { max-height: calc(100vh - 48px); display: flex; flex-direction: column; }
 #admin .lb-list { max-height: none; flex: 1; min-height: 120px; }
@@ -1115,7 +1131,8 @@ const NEWS = {
   /* ---------- hírek (Sanity CMS) ---------- */
   const NEWS_API = 'https://' + NEWS.projectId + '.apicdn.sanity.io/v2025-02-19/data/query/' + NEWS.dataset;
   const NEWS_QUERY = '*[_type == "news" && defined(slug.current) && publishedAt <= now()] | order(publishedAt desc)[0...30]' +
-    '{_id, title, "slug": slug.current, publishedAt, excerpt, "img": image.asset->url, "alt": image.alt, body}';
+    '{_id, title, "slug": slug.current, publishedAt, excerpt, "img": image.asset->url, "alt": image.alt, ' +
+    'body[]{..., _type == "image" => {"url": asset->url, alt, caption}}}';
   const newsEl = $('news'), newsBtn = $('newsBtn'), newsDot = $('newsDot');
   const newsScroll = $('newsScroll'), newsBack = $('newsBack');
   let newsItems = [];
@@ -1138,32 +1155,66 @@ const NEWS = {
     newsDot.hidden = !newsItems.length || newsItems[0].publishedAt <= seenAt();
   }
 
-  // Sanity Portable Text -> HTML (bekezdés, alcím, felsorolás, félkövér, dőlt, link)
+  // A Studióban választható szövegszínek (studio/schemaTypes/body.tsx → TEXT_COLORS)
+  const NEWS_COLORS = { teal: '#3cc3c4', gold: '#ac9372', red: '#e5484d' };
+  const safeUrl = (u) => /^(https?:|mailto:)/i.test(u || '') ? u : '';
+  function youtubeId(url) {
+    const m = String(url || '').match(/(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/))([\w-]{11})/);
+    return m ? m[1] : null;
+  }
+
+  // Sanity Portable Text -> HTML
   function portableText(blocks) {
-    let html = '', inList = false;
+    let html = '', list = null;
+    const closeList = () => { if (list) { html += list === 'number' ? '</ol>' : '</ul>'; list = null; } };
     (blocks || []).forEach((b) => {
-      if (b._type !== 'block') return;
-      const links = {};
-      (b.markDefs || []).forEach((d) => { if (d._type === 'link' && /^(https?:|mailto:)/i.test(d.href || '')) links[d._key] = d.href; });
+      if (b._type !== 'block') {
+        closeList();
+        if (b._type === 'image' && b.url) {
+          html += '<figure><img src="' + esc(b.url) + '?w=900&auto=format" alt="' + esc(b.alt || '') + '" loading="lazy">' +
+            (b.caption ? '<figcaption>' + esc(b.caption) + '</figcaption>' : '') + '</figure>';
+        } else if (b._type === 'youtube' && youtubeId(b.url)) {
+          html += '<figure><div class="news-video"><iframe src="https://www.youtube-nocookie.com/embed/' + youtubeId(b.url) +
+            '?rel=0&playsinline=1" title="' + esc(b.caption || 'YouTube video') + '" loading="lazy" allowfullscreen ' +
+            'allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe></div>' +
+            (b.caption ? '<figcaption>' + esc(b.caption) + '</figcaption>' : '') + '</figure>';
+        } else if (b._type === 'ctaButton' && b.label && (!b.url || safeUrl(b.url))) {
+          html += b.url
+            ? '<a class="news-cta" href="' + esc(b.url) + '" target="_blank" rel="noopener">' + esc(b.label) + '</a>'
+            : '<button type="button" class="news-cta" data-play>' + esc(b.label) + '</button>';
+        }
+        return;
+      }
+      const defs = {};
+      (b.markDefs || []).forEach((d) => { defs[d._key] = d; });
       const inner = (b.children || []).map((c) => {
         let t = esc(c.text).replace(/\n/g, '<br>');
         (c.marks || []).forEach((m) => {
           if (m === 'strong') t = '<b>' + t + '</b>';
           else if (m === 'em') t = '<i>' + t + '</i>';
-          else if (links[m]) t = '<a href="' + esc(links[m]) + '" target="_blank" rel="noopener">' + t + '</a>';
+          else if (m === 'underline') t = '<u>' + t + '</u>';
+          else if (m === 'strike-through') t = '<s>' + t + '</s>';
+          else if (m === 'highlight') t = '<mark>' + t + '</mark>';
+          else if (defs[m] && defs[m]._type === 'link' && safeUrl(defs[m].href)) t = '<a href="' + esc(defs[m].href) + '" target="_blank" rel="noopener">' + t + '</a>';
+          else if (defs[m] && defs[m]._type === 'textColor' && NEWS_COLORS[defs[m].color]) t = '<span style="color:' + NEWS_COLORS[defs[m].color] + '">' + t + '</span>';
         });
         return t;
       }).join('');
       if (b.listItem) {
-        if (!inList) { html += '<ul>'; inList = true; }
+        const kind = b.listItem === 'number' ? 'number' : 'bullet';
+        if (list !== kind) { closeList(); html += kind === 'number' ? '<ol>' : '<ul>'; list = kind; }
         html += '<li>' + inner + '</li>';
         return;
       }
-      if (inList) { html += '</ul>'; inList = false; }
+      closeList();
       if (!inner) return;
-      html += b.style === 'h3' ? '<h3>' + inner + '</h3>' : '<p>' + inner + '</p>';
+      const tag = { h2: 'h2', h3: 'h3', h4: 'h4', blockquote: 'blockquote' }[b.style];
+      if (tag) html += '<' + tag + '>' + inner + '</' + tag + '>';
+      else if (b.style === 'lead') html += '<p class="lead">' + inner + '</p>';
+      else if (b.style === 'small') html += '<p class="small">' + inner + '</p>';
+      else html += '<p>' + inner + '</p>';
     });
-    if (inList) html += '</ul>';
+    closeList();
     return html;
   }
 
@@ -1185,13 +1236,14 @@ const NEWS = {
       (n.img ? '<img src="' + esc(n.img) + '?w=900&auto=format" alt="' + esc(n.alt || '') + '">' : '') +
       '<div class="d">' + newsDate(n.publishedAt) + '</div>' +
       '<h2>' + esc(n.title) + '</h2>' +
-      (portableText(n.body) || (n.excerpt ? '<p>' + esc(n.excerpt) + '</p>' : '')) +
+      '<div class="news-body">' + (portableText(n.body) || (n.excerpt ? '<p>' + esc(n.excerpt) + '</p>' : '')) + '</div>' +
       '</article>';
     newsScroll.scrollTop = 0;
   }
   newsScroll.addEventListener('click', (e) => {
     const b = e.target.closest('button[data-i]');
     if (b) showArticle(newsItems[+b.dataset.i]);
+    if (e.target.closest('[data-play]')) { closeNews(); begin(); }
   });
   newsBack.addEventListener('click', showNewsList);
 
