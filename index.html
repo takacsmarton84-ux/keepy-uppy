@@ -336,6 +336,61 @@ body.playing .top .crest, body.playing .news-btn { visibility: hidden; }
   -webkit-user-select: text; user-select: text;
 }
 .news-list { list-style: none; margin: 0; padding: 0; }
+.story-row {
+  display: flex; gap: 14px; overflow-x: auto; margin: 0 -20px; padding: 12px 20px 14px;
+  border-bottom: 1px solid rgba(127, 140, 150, 0.2);
+  touch-action: pan-x pan-y; overscroll-behavior-x: contain; scrollbar-width: none;
+}
+.story-row::-webkit-scrollbar { display: none; }
+.card .story-row button {
+  flex: none; width: 72px; padding: 0; background: none; color: var(--card-ink); border-radius: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 6px; font: inherit;
+}
+.story-row .ring {
+  width: 68px; height: 68px; border-radius: 50%; padding: 3px;
+  background: conic-gradient(var(--accent), #8be3e4, var(--tier), var(--accent));
+}
+.story-row .seen .ring { background: rgba(127, 140, 150, 0.45); }
+.story-row .ring img {
+  width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block;
+  border: 3px solid var(--card); background: rgba(127, 140, 150, 0.2);
+}
+.story-row .nm { font-size: 12px; font-weight: 600; max-width: 72px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#story { position: fixed; inset: 0; z-index: 7; background: #000; color: #fff; }
+#story[hidden] { display: none; }
+.story-stage { position: absolute; inset: 0; touch-action: none; }
+.story-stage img { width: 100%; height: 100%; object-fit: cover; display: block; -webkit-user-drag: none; pointer-events: none; }
+.story-top {
+  position: absolute; left: 0; right: 0; top: 0;
+  padding: calc(env(safe-area-inset-top, 0px) + 8px) 10px 24px;
+  background: linear-gradient(rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0));
+  pointer-events: none;
+}
+.story-bars { display: flex; gap: 4px; }
+.story-bars span { flex: 1; height: 3px; border-radius: 2px; background: rgba(255, 255, 255, 0.35); overflow: hidden; }
+.story-bars i { display: block; height: 100%; width: 0; background: #fff; }
+.story-bars i.done { width: 100%; }
+.story-who { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.story-who img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
+.story-who b { font-size: 14px; }
+.story-who span { font-size: 13px; opacity: 0.75; }
+#storyX {
+  margin-left: auto; width: 40px; height: 40px; border: 0; padding: 0; background: none; color: #fff;
+  pointer-events: auto; display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+#storyX svg { width: 26px; height: 26px; }
+.story-bottom {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 40px 20px calc(env(safe-area-inset-bottom, 0px) + 24px);
+  background: linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.6));
+  pointer-events: none; text-align: center;
+}
+.story-bottom p { margin: 0 0 14px; font-size: 16px; font-weight: 600; line-height: 1.4; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5); }
+#storyLink {
+  pointer-events: auto; border: 0; border-radius: 999px; padding: 12px 24px;
+  background: #fff; color: #0c1e2c; font: 700 15px var(--font); cursor: pointer;
+}
+#storyLink[hidden], #storyCap[hidden] { display: none; }
 .news-list li { border-bottom: 1px solid rgba(127, 140, 150, 0.2); }
 .card .news-list button {
   display: grid; grid-template-columns: 96px 1fr; gap: 14px; align-items: center;
@@ -480,6 +535,27 @@ body.playing .top .crest, body.playing .news-btn { visibility: hidden; }
       <span></span>
     </div>
     <div class="news-scroll" id="newsScroll"></div>
+  </div>
+</div>
+
+<div id="story" role="dialog" aria-modal="true" aria-label="Story" hidden>
+  <div class="story-stage" id="storyStage">
+    <img id="storyImg" alt="">
+  </div>
+  <div class="story-top">
+    <div class="story-bars" id="storyBars"></div>
+    <div class="story-who">
+      <img id="storyAvatar" alt="">
+      <b id="storyName"></b>
+      <span id="storyWhen"></span>
+      <button id="storyX" type="button" aria-label="Close story">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="story-bottom">
+    <p id="storyCap" hidden></p>
+    <button id="storyLink" type="button" hidden></button>
   </div>
 </div>
 
@@ -1149,13 +1225,18 @@ const NEWS = {
 
   /* ---------- hírek (Sanity CMS) ---------- */
   const NEWS_API = 'https://' + NEWS.projectId + '.apicdn.sanity.io/v2025-02-19/data/query/' + NEWS.dataset;
-  const NEWS_QUERY = '*[_type == "news" && defined(slug.current) && publishedAt <= now()] | order(publishedAt desc)[0...30]' +
+  const NEWS_QUERY = '{"news": *[_type == "news" && defined(slug.current) && publishedAt <= now()] | order(publishedAt desc)[0...30]' +
     '{_id, title, "slug": slug.current, publishedAt, excerpt, "img": image.asset->url, "alt": image.alt, ' +
-    'body[]{..., _type == "image" => {"url": asset->url, alt, caption}}}';
+    'body[]{..., _type == "image" => {"url": asset->url, alt, caption}}}, ' +
+    '"stories": *[_type == "story" && publishedAt <= now() && (!defined(expiresAt) || expiresAt > now()) && count(slides) > 0]' +
+    ' | order(publishedAt desc)[0...20]{_id, title, publishedAt, ' +
+    '"cover": cover{"url": asset->url, crop, hotspot}, ' +
+    '"slides": slides[defined(image.asset)]{_key, "img": image{"url": asset->url, crop, hotspot}, caption, "news": news->slug.current, url, label}}}';
   const newsEl = $('news'), newsBtn = $('newsBtn'), newsDot = $('newsDot');
   const newsScroll = $('newsScroll'), newsBack = $('newsBack');
-  let newsItems = [];
+  let newsItems = [], stories = [];
   try { newsItems = JSON.parse(localStorage.getItem('keepy-news') || '[]'); } catch (e) { newsItems = []; }
+  try { stories = JSON.parse(localStorage.getItem('keepy-stories') || '[]'); } catch (e) { stories = []; }
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1170,8 +1251,9 @@ const NEWS = {
     newsDot.hidden = true;
   }
   function refreshNewsBtn() {
-    newsBtn.hidden = !newsItems.length;
-    newsDot.hidden = !newsItems.length || newsItems[0].publishedAt <= seenAt();
+    newsBtn.hidden = !newsItems.length && !stories.length;
+    const unreadNews = newsItems.length && newsItems[0].publishedAt > seenAt();
+    newsDot.hidden = !(unreadNews || stories.some((st) => !storySeen(st)));
   }
 
   // A Studióban választható szövegszínek (studio/schemaTypes/body.tsx → TEXT_COLORS)
@@ -1240,11 +1322,12 @@ const NEWS = {
   function showNewsList() {
     newsBack.hidden = true;
     $('newsX').hidden = false;
-    if (!newsItems.length) { newsScroll.innerHTML = '<div class="news-status">No news yet.</div>'; return; }
+    const row = storyRow();
+    if (!newsItems.length) { newsScroll.innerHTML = row + (row ? '' : '<div class="news-status">No news yet.</div>'); return; }
     const seen = seenAt();
-    newsScroll.innerHTML = '<ul class="news-list">' + newsItems.map((n, i) =>
+    newsScroll.innerHTML = row + '<ul class="news-list">' + newsItems.map((n, i) =>
       '<li><button type="button" data-i="' + i + '">' +
-      '<span class="thumb"' + (n.img ? ' style="background-image:url(\'' + esc(n.img) + '?w=160&h=130&fit=crop&auto=format\')"' : '') + '></span>' +
+      '<span class="thumb"' + (n.img ? ' style="background-image:url(\'' + esc(n.img) + '?w=288&h=228&fit=crop&auto=format\')"' : '') + '></span>' +
       '<span><span class="t">' + esc(n.title) + '</span>' +
       (n.excerpt ? '<span class="x">' + esc(n.excerpt) + '</span>' : '') +
       '<span class="d">' + (n.publishedAt > seen ? '<span class="new">● New</span> · ' : '') + newsDate(n.publishedAt) + '</span></span>' +
@@ -1266,6 +1349,8 @@ const NEWS = {
     const b = e.target.closest('button[data-i]');
     if (b) showArticle(newsItems[+b.dataset.i]);
     if (e.target.closest('[data-play]')) { closeNews(); begin(); }
+    const sb = e.target.closest('button[data-story]');
+    if (sb) openStory(+sb.dataset.story);
   });
   newsBack.addEventListener('click', showNewsList);
 
@@ -1283,17 +1368,173 @@ const NEWS = {
   }
   newsBtn.addEventListener('click', () => openNews());
   $('newsX').addEventListener('click', closeNews);
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !newsEl.hidden) closeNews(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !newsEl.hidden && storyEl.hidden) closeNews(); });
+
+  /* ---------- storyk (Instagram-szerű, csak képek) ---------- */
+  const STORY_MS = 5000;
+  const storyEl = $('story'), storyBars = $('storyBars'), storyImg = $('storyImg');
+  const storyCap = $('storyCap'), storyLink = $('storyLink');
+  let sIdx = 0, slIdx = 0, sTimer = null, sStart = 0, sLeft = STORY_MS, sPaused = false, sLoaded = false;
+
+  // Sanity képvágás: a Studióban beállított kivágást és fókuszpontot (hotspot) is figyelembe veszi
+  function sanityImg(im, w, h) {
+    if (!im || !im.url) return '';
+    let q = '?auto=format&fit=crop&w=' + w + '&h=' + h;
+    const m = im.url.match(/-(\d+)x(\d+)\.\w+$/);
+    if (im.crop && m) {
+      const W = +m[1], H = +m[2], c = im.crop;
+      q += '&rect=' + [Math.round(c.left * W), Math.round(c.top * H), Math.round((1 - c.left - c.right) * W), Math.round((1 - c.top - c.bottom) * H)].join(',');
+    }
+    if (im.hotspot) q += '&crop=focalpoint&fp-x=' + im.hotspot.x.toFixed(3) + '&fp-y=' + im.hotspot.y.toFixed(3);
+    return im.url + q;
+  }
+  function storySeenMap() { try { return JSON.parse(localStorage.getItem('keepy-stories-seen') || '{}'); } catch (e) { return {}; } }
+  function storySeen(st) { return !!storySeenMap()[st._id]; }
+  function markStorySeen(st) {
+    const m = storySeenMap();
+    m[st._id] = 1;
+    const live = {};
+    stories.forEach((x) => { if (m[x._id]) live[x._id] = 1; });   // a lejárt storykat elfelejti
+    try { localStorage.setItem('keepy-stories-seen', JSON.stringify(live)); } catch (e) {}
+  }
+  function storyRow() {
+    if (!stories.length) return '';
+    // a még nem látott storyk kerülnek előre
+    const order = stories.map((st, i) => i).sort((a, b) => storySeen(stories[a]) - storySeen(stories[b]));
+    return '<div class="story-row">' + order.map((i) => {
+      const st = stories[i];
+      return '<button type="button" data-story="' + i + '" class="' + (storySeen(st) ? 'seen' : '') + '">' +
+        '<span class="ring"><img src="' + esc(sanityImg(st.cover, 150, 150)) + '" alt=""></span>' +
+        '<span class="nm">' + esc(st.title) + '</span></button>';
+    }).join('') + '</div>';
+  }
+
+  function openStory(i) {
+    if (!stories[i]) return;
+    sIdx = i; slIdx = 0;
+    storyEl.hidden = false;
+    showSlide();
+  }
+  function closeStory() {
+    clearTimeout(sTimer);
+    storyEl.hidden = true;
+    storyImg.removeAttribute('src');
+    if (!newsEl.hidden && !newsScroll.querySelector('.news-article')) {
+      const top = newsScroll.scrollTop;
+      showNewsList();                 // a megnézett storyk szürkék lesznek
+      newsScroll.scrollTop = top;
+    }
+    refreshNewsBtn();
+  }
+  function showSlide() {
+    const st = stories[sIdx], sl = st.slides[slIdx];
+    markStorySeen(st);
+    $('storyAvatar').src = sanityImg(st.cover, 80, 80);
+    $('storyName').textContent = st.title;
+    $('storyWhen').textContent = newsDate(st.publishedAt);
+    storyBars.innerHTML = st.slides.map((x, k) => '<span><i class="' + (k < slIdx ? 'done' : '') + '"></i></span>').join('');
+    storyCap.textContent = sl.caption || '';
+    storyCap.hidden = !sl.caption;
+    const target = sl.news && newsItems.some((n) => n.slug === sl.news) ? 'news' : (safeUrl(sl.url) ? 'url' : '');
+    storyLink.hidden = !target;
+    storyLink.textContent = sl.label || 'Read more';
+    storyLink.dataset.target = target;
+    clearTimeout(sTimer);
+    sLeft = STORY_MS; sPaused = false; sLoaded = false;
+    const src = sanityImg(sl.img, 1080, 1920);
+    storyImg.onload = storyImg.onerror = () => { if (storyImg.dataset.src === src) { sLoaded = true; runTimer(); } };
+    storyImg.dataset.src = src;
+    storyImg.src = src;
+    if (storyImg.complete && storyImg.naturalWidth) { sLoaded = true; runTimer(); }
+    // a következő képet előre betölti
+    const nx = st.slides[slIdx + 1] || (stories[sIdx + 1] && stories[sIdx + 1].slides[0]);
+    if (nx) new Image().src = sanityImg(nx.img, 1080, 1920);
+  }
+  function bar() { return storyBars.children[slIdx] && storyBars.children[slIdx].firstChild; }
+  function runTimer() {
+    if (!sLoaded || sPaused || storyEl.hidden) return;
+    const b = bar();
+    if (b) {
+      b.style.transition = 'none';
+      b.style.width = (100 * (1 - sLeft / STORY_MS)) + '%';
+      void b.offsetWidth;
+      b.style.transition = 'width ' + sLeft + 'ms linear';
+      b.style.width = '100%';
+    }
+    sStart = performance.now();
+    clearTimeout(sTimer);
+    sTimer = setTimeout(nextSlide, sLeft);
+  }
+  function pauseStory() {
+    if (sPaused) return;
+    sPaused = true;
+    clearTimeout(sTimer);
+    if (sLoaded) sLeft = Math.max(0, sLeft - (performance.now() - sStart));
+    const b = bar();
+    if (b) { b.style.transition = 'none'; b.style.width = (100 * (1 - sLeft / STORY_MS)) + '%'; }
+  }
+  function resumeStory() { if (!sPaused) return; sPaused = false; runTimer(); }
+  function nextSlide() {
+    const st = stories[sIdx];
+    if (slIdx < st.slides.length - 1) { slIdx++; showSlide(); }
+    else if (sIdx < stories.length - 1) { sIdx++; slIdx = 0; showSlide(); }
+    else closeStory();
+  }
+  function prevSlide() {
+    if (slIdx > 0) slIdx--;
+    else if (sIdx > 0) { sIdx--; slIdx = stories[sIdx].slides.length - 1; }
+    showSlide();
+  }
+  // Koppintás: bal harmad vissza, a többi előre. Nyomva tartás: megáll. Lefelé húzás: bezár.
+  let pDown = null;
+  $('storyStage').addEventListener('pointerdown', (e) => {
+    pDown = { x: e.clientX, y: e.clientY, t: performance.now() };
+    pauseStory();
+  });
+  $('storyStage').addEventListener('pointerup', (e) => {
+    if (!pDown) return;
+    const dy = e.clientY - pDown.y, held = performance.now() - pDown.t;
+    const x = pDown.x;
+    pDown = null;
+    if (dy > 80) { closeStory(); return; }
+    if (held < 250) { if (x < window.innerWidth / 3) prevSlide(); else nextSlide(); return; }
+    resumeStory();
+  });
+  $('storyStage').addEventListener('pointercancel', () => { pDown = null; resumeStory(); });
+  $('storyX').addEventListener('click', closeStory);
+  storyLink.addEventListener('click', () => {
+    const sl = stories[sIdx].slides[slIdx];
+    if (storyLink.dataset.target === 'url') { pauseStory(); window.open(sl.url, '_blank', 'noopener'); return; }
+    const item = newsItems.find((n) => n.slug === sl.news);
+    closeStory();
+    if (!item) return;
+    if (newsEl.hidden) openNews(sl.news); else showArticle(item);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (storyEl.hidden) return;
+    if (e.key === 'Escape') closeStory();
+    else if (e.key === 'ArrowRight') nextSlide();
+    else if (e.key === 'ArrowLeft') prevSlide();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (storyEl.hidden) return;
+    if (document.hidden) pauseStory(); else resumeStory();
+  });
 
   function loadNews() {
     if (!NEWS.projectId) return Promise.resolve();
     return fetch(NEWS_API + '?query=' + encodeURIComponent(NEWS_QUERY))
       .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
       .then((data) => {
-        newsItems = Array.isArray(data.result) ? data.result : [];
-        try { localStorage.setItem('keepy-news', JSON.stringify(newsItems)); } catch (e) {}
+        const res = data.result || {};
+        newsItems = Array.isArray(res.news) ? res.news : [];
+        stories = Array.isArray(res.stories) ? res.stories.filter((st) => st.slides && st.slides.length) : [];
+        try {
+          localStorage.setItem('keepy-news', JSON.stringify(newsItems));
+          localStorage.setItem('keepy-stories', JSON.stringify(stories));
+        } catch (e) {}
         refreshNewsBtn();
-        if (!newsEl.hidden && newsScroll.querySelector('.news-list, .news-status')) showNewsList();
+        if (!newsEl.hidden && storyEl.hidden && !newsScroll.querySelector('.news-article')) showNewsList();
       })
       .catch(() => {});   // offline: a legutóbb letöltött hírek maradnak
   }
